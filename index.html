@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Advisor Chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="phone-frame">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>🔋 100%</span>
+    </div>
+
+    <div class="top-bar">
+      <div class="top-left">
+        <div class="back-btn">‹</div>
+        <div class="title-block">
+          <span>AI Advisor</span>
+          <span>Workout & BMI Coach</span>
+        </div>
+      </div>
+      <div class="profile-circle">AI</div>
+    </div>
+
+    <div class="chat-container">
+      <div class="chat-scroll" id="chat">
+        <div class="date-separator">Today</div>
+      </div>
+
+      <div class="input-area">
+        <div class="chip-row" id="chips">
+          <div class="chip" data-goal="lose fat">Lose body fat</div>
+          <div class="chip" data-goal="build muscle">Build muscle</div>
+          <div class="chip" data-goal="maintain">Maintain & tone</div>
+        </div>
+        <div class="input-row">
+          <button class="icon-btn">🎤</button>
+          <input id="userInput" type="text" placeholder="Ask me about your BMI or routine…" />
+          <button class="icon-btn send" id="sendBtn">➤</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-pill active">
+        <span class="nav-dot"></span>
+        <span>Advisor</span>
+      </div>
+      <div class="nav-pill">
+        <span class="nav-dot"></span>
+        <span>Routine</span>
+      </div>
+      <div class="nav-pill">
+        <span class="nav-dot"></span>
+        <span>Profile</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
