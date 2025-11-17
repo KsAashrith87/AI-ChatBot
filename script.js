@@ -3,13 +3,15 @@ const inputEl = document.getElementById("userInput");
 const sendBtn = document.getElementById("sendBtn");
 const chipsEl = document.getElementById("chips");
 
-let convoStep = "unit";      // unit -> height -> weight -> goal -> done
-let unitSystem = "metric";   // "metric" or "imperial"
-let height = null;           // in meters
-let weight = null;           // in kg
+// States: waitGreeting -> askUnits -> askImperialData/askMetricData -> askGoal -> afterPlan
+let convoStep = "waitGreeting";
+let unitSystem = null; // "imperial" or "metric"
+let heightM = null;    // height in meters
+let weightKg = null;   // weight in kilograms
 let bmi = null;
+let goal = null;
 
-// ---------- Helpers ----------
+// ---------- Helper: add chat bubble ----------
 function addMessage(text, from = "bot") {
   const row = document.createElement("div");
   row.className = "message-row " + (from === "bot" ? "bot" : "user");
@@ -30,105 +32,164 @@ function addMessage(text, from = "bot") {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-function bmiCategory(bmiVal) {
-  if (bmiVal < 18.5) return "underweight";
-  if (bmiVal < 25) return "normal";
-  if (bmiVal < 30) return "overweight";
+// ---------- BMI helpers ----------
+function getBmiCategory(b) {
+  if (b < 18.5) return "underweight";
+  if (b < 25) return "normal";
+  if (b < 30) return "overweight";
   return "obese";
 }
 
-function healthyWeightText() {
-  const low = 18.5 * height * height;
-  const high = 24.9 * height * height;
+function getHealthyWeightRangeText() {
+  if (!heightM || !weightKg || !bmi) return "";
 
-  let msg = `For your height, a healthy BMI range (18.5–24.9) is about <b>${low
-    .toFixed(1)} kg – ${high.toFixed(1)} kg</b>.`;
+  const lowKg = 18.5 * heightM * heightM;
+  const highKg = 24.9 * heightM * heightM;
 
-  if (weight < low) {
-    msg += `<br>You’d need to gain around <b>${(low - weight).toFixed(
+  let msg =
+    `For your height, a healthy BMI range (18.5–24.9) means a weight between ` +
+    `<b>${lowKg.toFixed(1)} kg</b> and <b>${highKg.toFixed(1)} kg</b>.`;
+
+  if (weightKg < lowKg) {
+    msg += `<br>You’d need to gain about <b>${(lowKg - weightKg).toFixed(
       1
-    )} kg</b> to reach the lower end of that range.`;
-  } else if (weight > high) {
-    msg += `<br>You’d need to lose around <b>${(weight - high).toFixed(
+    )} kg</b> to reach the lower end.`;
+  } else if (weightKg > highKg) {
+    msg += `<br>You’d need to lose about <b>${(weightKg - highKg).toFixed(
       1
-    )} kg</b> to reach the upper end of that range.`;
+    )} kg</b> to reach the upper end.`;
   } else {
-    msg += `<br>You’re already in the healthy range — the goal now is maintaining it with smart training and food choices.`;
+    msg += `<br>You’re already in the healthy range — main goal is to maintain and build quality muscle.`;
   }
-
-  msg +=
-    "<br><br>We’ll use your goal (build muscle, get abs, or lose weight) to pick a routine that nudges you toward that range in a steady, healthy way.";
 
   return msg;
 }
 
-function buildWorkoutPlan(goalText) {
-  const lower = goalText.toLowerCase();
-  let plan = "";
+// ---------- Diet & workout by goal ----------
+function getDietText(goalType) {
+  const b = bmi;
+  const cat = b ? getBmiCategory(b) : null;
 
-  if (lower.includes("abs") || lower.includes("core") || lower.includes("six")) {
-    plan =
-      "💥 <b>Abs / Core-Focused Plan</b><br>" +
-      "• 3–4x/week full-body strength: squats, push-ups/bench, rows, hip hinges.<br>" +
-      "• 3x/week 10–15 minutes of core finishers: planks, leg raises, dead bugs, cable crunches.<br>" +
-      "• 3–4x/week 20–30 min moderate cardio (walking, bike, incline treadmill) to help lower body fat.<br>" +
-      "• Small calorie deficit + high protein = the combo for visible abs.";
-  } else if (
-    lower.includes("muscle") ||
-    lower.includes("bulk") ||
-    lower.includes("strength") ||
-    lower.includes("build")
-  ) {
-    plan =
-      "💪 <b>Muscle Building Plan</b><br>" +
-      "• 3–5x/week lifting with a push/pull/legs or upper/lower split.<br>" +
-      "• 3–4 sets of 6–12 reps on big lifts (squats, bench/press, rows, deadlifts).<br>" +
-      "• 1–2x/week light cardio for heart health (15–20 min walk/bike).<br>" +
-      "• Small calorie surplus + 1.6–2.2 g protein/kg body weight.";
-  } else if (
-    lower.includes("lose") ||
-    lower.includes("fat") ||
-    lower.includes("cut") ||
-    lower.includes("weight")
-  ) {
-    plan =
-      "🔥 <b>Weight / Fat Loss Plan</b><br>" +
-      "• 4–5x/week 30–40 min brisk walking, cycling, or light jogging.<br>" +
-      "• 2–3x/week full-body strength training (so you keep muscle while losing fat).<br>" +
-      "• Aim for a small calorie deficit (~300–500 kcal/day).<br>" +
-      "• Lots of protein, veggies, water, and 7–9 hours of sleep.";
-  } else {
-    plan =
-      "⚖️ <b>Maintenance & Toning Plan</b><br>" +
-      "• 2–3x/week strength training (full body or upper/lower split).<br>" +
-      "• 2–3x/week 20–30 min cardio or sports.<br>" +
-      "• Eat around maintenance calories, focus on whole foods and protein.";
+  if (goalType === "lose") {
+    return (
+      "🥗 <b>Weight / Fat Loss Diet</b><br>" +
+      (cat ? `Based on your BMI (<b>${b.toFixed(1)}</b>, ${cat}), we’ll aim for a small calorie deficit.<br><br>` : "") +
+      "<b>Vegetarian option:</b><br>" +
+      "• Breakfast: Oats with skim milk, berries, and a scoop of whey or soy protein.<br>" +
+      "• Lunch: Lentil/bean curry, brown rice or roti, and a big mixed salad.<br>" +
+      "• Snack: Greek yogurt or low-fat curd with fruit and a handful of nuts.<br>" +
+      "• Dinner: Grilled paneer/tofu with veggies (stir-fry or roasted), plus a light carb like quinoa or roti.<br>" +
+      "• Focus on: High protein, lots of veggies, minimal sugary drinks, and controlled portion sizes.<br><br>" +
+      "<b>Non-vegetarian option:</b><br>" +
+      "• Breakfast: Scrambled eggs or egg whites with whole grain toast and fruit.<br>" +
+      "• Lunch: Grilled chicken or fish with brown rice and veggies/salad.<br>" +
+      "• Snack: Greek yogurt or a protein shake with some nuts.<br>" +
+      "• Dinner: Lean chicken/fish with a big portion of veggies and a small serving of rice/potatoes/roti.<br>" +
+      "• Focus on: High protein, moderate healthy fats, fewer refined carbs, and a small calorie deficit."
+    );
   }
 
-  if (bmi !== null) {
-    const cat = bmiCategory(bmi);
-    plan += `<br><br>Because your BMI is <b>${bmi.toFixed(
-      1
-    )}</b> (${cat}), this routine is tuned to help you move toward or stay within a healthy range over time.`;
+  if (goalType === "muscle") {
+    return (
+      "🍛 <b>Muscle Building Diet</b><br>" +
+      (cat ? `With a BMI of <b>${b.toFixed(1)}</b> (${cat}), we’ll use a small calorie surplus, not a dirty bulk.<br><br>` : "") +
+      "<b>Vegetarian option:</b><br>" +
+      "• Breakfast: Oats with milk, peanut butter, banana, and a scoop of whey/plant protein.<br>" +
+      "• Lunch: Paneer or tofu curry, rice/roti, and a big veggie side.<br>" +
+      "• Snack: Protein shake + nuts or hummus with whole grain crackers.<br>" +
+      "• Dinner: Lentils/beans + paneer/tofu + veggies + a carb like rice/pasta/quinoa.<br>" +
+      "• Focus on: High protein every meal, enough carbs to fuel heavy lifts, and healthy fats (nuts, seeds, olive oil).<br><br>" +
+      "<b>Non-vegetarian option:</b><br>" +
+      "• Breakfast: Eggs/egg whites, whole grain toast, fruit, and maybe milk or a protein shake.<br>" +
+      "• Lunch: Chicken/turkey/fish with rice or pasta and veggies.<br>" +
+      "• Snack: Greek yogurt, cottage cheese, or protein shake with nuts.<br>" +
+      "• Dinner: Lean meat or fish + potatoes/rice/quinoa + veggies.<br>" +
+      "• Focus on: 1.6–2.2 g protein per kg of body weight, steady surplus, not junk food overload."
+    );
   }
 
-  return plan;
+  if (goalType === "abs") {
+    return (
+      "🥦 <b>Abs / Core Definition Diet</b><br>" +
+      (cat ? `Your BMI is <b>${b.toFixed(1)}</b> (${cat}). Visible abs need relatively low body fat + strong core.<br><br>` : "") +
+      "<b>Vegetarian option:</b><br>" +
+      "• Breakfast: High-protein oats (oats + milk/water + protein powder) and berries.<br>" +
+      "• Lunch: Mixed veggie salad with beans/lentils/tofu, light dressing.<br>" +
+      "• Snack: Low-fat yogurt/curd with fruit, or roasted chana.<br>" +
+      "• Dinner: Paneer/tofu stir-fry with lots of veggies, small portion of rice/roti.<br>" +
+      "• Focus on: Slight calorie deficit, high fiber, high protein, minimal sugar and processed snacks.<br><br>" +
+      "<b>Non-vegetarian option:</b><br>" +
+      "• Breakfast: Egg whites and veggies omelette, one slice whole grain toast.<br>" +
+      "• Lunch: Grilled chicken/fish with salad and a small portion of rice/roti.<br>" +
+      "• Snack: Protein shake or boiled eggs with some veggies.<br>" +
+      "• Dinner: Lean meat or fish with a big serving of veggies and minimal carbs.<br>" +
+      "• Focus on: Lean protein, low-ish carbs timed around workouts, lots of veggies, water, and low sugar."
+    );
+  }
+
+  // default / maintain
+  return (
+    "🍽️ <b>Maintenance / Toning Diet</b><br>" +
+    (cat ? `At a BMI of <b>${b.toFixed(1)}</b> (${cat}), we’ll aim to maintain weight while improving body composition.<br><br>` : "") +
+    "<b>Vegetarian option:</b><br>" +
+    "• Balanced meals: protein source (paneer/tofu/beans), whole grains (rice/roti/quinoa), and veggies at each meal.<br>" +
+    "• Snacks: Fruit, yogurt, nuts in moderate portions.<br>" +
+    "• Focus on: Consistency, not perfection, with enough protein to support training.<br><br>" +
+    "<b>Non-vegetarian option:</b><br>" +
+    "• Similar structure: lean meat/fish + whole grains + veggies.<br>" +
+    "• Snacks: Greek yogurt, boiled eggs, fruit, nuts.<br>" +
+    "• Focus on: Eating around your hunger levels, not stuffing or starving, and keeping protein high."
+  );
 }
 
-function smallTalkResponse(inputLower) {
-  if (inputLower.includes("hi") || inputLower.includes("hello")) {
-    return "Hey! 😊 I’m here as your fitness assistant. We’ll use your height, weight, and goal to build a plan.";
+function getWorkoutText(goalType) {
+  if (goalType === "lose") {
+    return (
+      "🏋️ <b>Weight / Fat Loss Workout Plan</b><br>" +
+      "• <b>3–4 days/week:</b> Full-body strength training (squats, lunges, rows, presses, hip hinges). 3 sets of 8–12 reps.<br>" +
+      "• <b>3–5 days/week:</b> 30–40 minutes of brisk walking, cycling, or light jogging.<br>" +
+      "• Optional: 1–2 short HIIT sessions per week (10–15 min) if joints handle it.<br>" +
+      "• Goal: Keep or build muscle while slowly dropping body fat."
+    );
   }
-  if (inputLower.includes("thank")) {
-    return "You’re welcome! If you want to tweak anything, just tell me your goal again or type <b>restart</b>.";
+
+  if (goalType === "muscle") {
+    return (
+      "🏋️‍♂️ <b>Muscle Building Workout Plan</b><br>" +
+      "• <b>4–5 days/week lifting:</b><br>" +
+      "  – Day 1: Push (chest, shoulders, triceps)<br>" +
+      "  – Day 2: Pull (back, biceps)<br>" +
+      "  – Day 3: Legs (quads, hamstrings, glutes, calves)<br>" +
+      "  – Day 4: Upper or full-body, optional Day 5 for weak points.<br>" +
+      "• 3–4 sets of 6–12 reps on compounds, 8–15 on accessories.<br>" +
+      "• 1–2 light cardio sessions per week just for heart health (15–20 min walk/bike).<br>" +
+      "• Progress: Try to add small amounts of weight or reps each week (progressive overload)."
+    );
   }
-  if (inputLower.includes("bro") || inputLower.includes("dude")) {
-    return "😂 I got you. I’ll handle the numbers, you just bring the effort.";
+
+  if (goalType === "abs") {
+    return (
+      "💥 <b>Abs / Core Workout Plan</b><br>" +
+      "• <b>3–4 days/week:</b> Full-body or upper/lower strength (so your whole body stays strong).<br>" +
+      "• <b>3 days/week core finishers:</b><br>" +
+      "  – Planks (front + side) 3 x 30–45 seconds<br>" +
+      "  – Hanging knee/leg raises or lying leg raises 3 x 10–15 reps<br>" +
+      "  – Dead bugs/bicycle crunches 3 x 12–20 reps<br>" +
+      "• <b>3–5 days/week:</b> 20–30 minutes of moderate cardio (walk, bike, jog).<br>" +
+      "• Reminder: Abs show when body fat is low enough — diet and consistency matter more than crazy ab circuits."
+    );
   }
-  return null;
+
+  // default / maintain
+  return (
+    "🏃 <b>Maintenance / Toning Workout Plan</b><br>" +
+    "• <b>2–3 days/week:</b> Strength training (full body or upper/lower split).<br>" +
+    "• <b>2–3 days/week:</b> 20–30 minutes of cardio (walking, light jogging, sports).<br>" +
+    "• Focus: Keep getting a bit stronger over time, keep activity consistent, and stay in a good routine you actually enjoy."
+  );
 }
 
-// ---------- Conversation Logic ----------
+// ---------- Main conversation handler ----------
 function processUserMessage(rawInput) {
   const input = rawInput.trim();
   if (!input) return;
@@ -136,187 +197,269 @@ function processUserMessage(rawInput) {
   const lower = input.toLowerCase();
   addMessage(input, "user");
 
-  // Global restart
-  if (/restart|start over|reset/.test(lower)) {
-    convoStep = "unit";
-    height = weight = bmi = null;
+  // Global "restart"
+  if (lower.includes("restart") || lower.includes("start over") || lower.includes("reset")) {
+    convoStep = "waitGreeting";
+    unitSystem = null;
+    heightM = null;
+    weightKg = null;
+    bmi = null;
+    goal = null;
     addMessage(
-      "Cool, let’s reset everything and start fresh. 👌<br>" +
-        "First, what units do you want to use: <b>metric</b> (cm &amp; kg) or <b>imperial</b> (inches &amp; lbs)?"
+      "No problem, we’ll start fresh. 👌<br>" +
+        "Say <b>hi</b> or <b>hey</b> to begin again."
     );
     return;
   }
 
-  // Light small talk layered on top of flows
-  const smallTalk = smallTalkResponse(lower);
-  if (smallTalk && convoStep !== "height" && convoStep !== "weight") {
-    addMessage(smallTalk);
+  // STEP 1: Greet back
+  if (convoStep === "waitGreeting") {
+    if (
+      lower.includes("hi") ||
+      lower.includes("hello") ||
+      lower.includes("hey") ||
+      lower.includes("yo")
+    ) {
+      addMessage(
+        "Nice to meet you! 😄<br>" +
+          "I’ll calculate your BMI first, then help you decide how to lose weight, build muscle, or get abs."
+      );
+      addMessage(
+        "Which units do you want to use?<br>" +
+          "<b>Imperial</b> (feet/inches &amp; pounds) or <b>Metric</b> (cm &amp; kg)?"
+      );
+      convoStep = "askUnits";
+    } else {
+      addMessage("Just say something like <b>hi</b> or <b>hey</b> to get started 😊");
+    }
+    return;
   }
 
-  // STEP 1: Units
-  if (convoStep === "unit") {
-    if (lower.includes("imperial")) {
+  // STEP 2: Ask which form (units)
+  if (convoStep === "askUnits") {
+    if (lower.includes("imperial") || lower.includes("feet") || lower.includes("ft")) {
       unitSystem = "imperial";
-    } else if (lower.includes("metric")) {
+      convoStep = "askImperialData";
+      addMessage(
+        "Cool, we’ll use <b>imperial</b> (feet/inches &amp; pounds).<br><br>" +
+          "Please send your details in this format:<br>" +
+          "Feet: 5<br>" +
+          "Inches: 10<br>" +
+          "Weight: 170"
+      );
+      return;
+    } else if (lower.includes("metric") || lower.includes("cm") || lower.includes("kg")) {
       unitSystem = "metric";
-    } else if (!isNaN(parseFloat(input))) {
-      // They gave a number right away, assume metric height
-      unitSystem = "metric";
-      convoStep = "height";
-      // fall through to height handler with same input
+      convoStep = "askMetricData";
+      addMessage(
+        "Nice, we’ll use <b>metric</b> (cm &amp; kg).<br><br>" +
+          "Please send your details in this format:<br>" +
+          "Height (cm): 175<br>" +
+          "Weight (kg): 68"
+      );
+      return;
     } else {
       addMessage(
-        "Before I can calculate anything, I need units: type <b>metric</b> (cm, kg) or <b>imperial</b> (inches, lbs)."
-      );
-      return;
-    }
-
-    if (convoStep !== "height") {
-      convoStep = "height";
-      addMessage(
-        `Nice. Let’s start with your <b>height</b> so I can calculate BMI.\n` +
-          `Enter your height in <b>${
-            unitSystem === "metric" ? "centimeters (e.g. 175)" : "inches (e.g. 70)"
-          }</b>.`
+        "Just tell me which system you prefer:<br>" +
+          "<b>Imperial</b> (feet/inches &amp; pounds) or <b>Metric</b> (cm &amp; kg)?"
       );
       return;
     }
   }
 
-  // STEP 2: Height
-  if (convoStep === "height") {
-    const h = parseFloat(input);
-    if (isNaN(h) || h <= 0) {
+  // STEP 3a: Imperial data input: Feet, Inches, Weight
+  if (convoStep === "askImperialData") {
+    // Get all numbers user typed, in order
+    const nums = input.match(/[-+]?\d*\.?\d+/g);
+    if (!nums || nums.length < 3) {
       addMessage(
-        `That doesn’t look like a valid height. Try a number like <b>${
-          unitSystem === "metric" ? "175" : "70"
-        }</b>.`
+        "I couldn’t read that clearly. Please follow this format:<br>" +
+          "Feet: 5<br>Inches: 10<br>Weight: 170"
       );
       return;
     }
 
-    height = unitSystem === "metric" ? h / 100 : h * 0.0254;
+    const feet = parseFloat(nums[0]);
+    const inches = parseFloat(nums[1]);
+    const pounds = parseFloat(nums[2]);
 
-    convoStep = "weight";
+    if (
+      isNaN(feet) ||
+      isNaN(inches) ||
+      isNaN(pounds) ||
+      feet <= 0 ||
+      inches < 0 ||
+      pounds <= 0
+    ) {
+      addMessage(
+        "Those numbers look off. Double-check and send like:<br>" +
+          "Feet: 5<br>Inches: 10<br>Weight: 170"
+      );
+      return;
+    }
+
+    const totalInches = feet * 12 + inches;
+    heightM = totalInches * 0.0254;
+    weightKg = pounds * 0.453592;
+    bmi = weightKg / (heightM * heightM);
+
+    const cat = getBmiCategory(bmi);
+
     addMessage(
-      "Got it 👍 Now I need your <b>weight</b> so I can finish the BMI.\n" +
-        `Enter your weight in <b>${
-          unitSystem === "metric" ? "kilograms (e.g. 70)" : "pounds (e.g. 160)"
-        }</b>.`
+      `Your estimated BMI is <b>${bmi.toFixed(1)}</b>, which is considered <b>${cat}</b>.`
+    );
+    addMessage(getHealthyWeightRangeText());
+
+    convoStep = "askGoal";
+    addMessage(
+      "Now, what’s your main goal?<br>" +
+        "Do you want to <b>lose weight</b>, <b>build muscle</b>, or <b>get abs</b>?"
     );
     return;
   }
 
-  // STEP 3: Weight
-  if (convoStep === "weight") {
-    const w = parseFloat(input);
-    if (isNaN(w) || w <= 0) {
+  // STEP 3b: Metric data input: Height (cm), Weight (kg)
+  if (convoStep === "askMetricData") {
+    const nums = input.match(/[-+]?\d*\.?\d+/g);
+    if (!nums || nums.length < 2) {
       addMessage(
-        `That doesn’t look like a valid weight. Try a number like <b>${
-          unitSystem === "metric" ? "70" : "160"
-        }</b>.`
+        "I couldn’t read that clearly. Please follow this format:<br>" +
+          "Height (cm): 175<br>Weight (kg): 68"
       );
       return;
     }
 
-    weight = unitSystem === "metric" ? w : w * 0.453592;
+    const heightCm = parseFloat(nums[0]);
+    const kg = parseFloat(nums[1]);
 
-    bmi = weight / (height * height);
-    const cat = bmiCategory(bmi);
+    if (isNaN(heightCm) || isNaN(kg) || heightCm <= 0 || kg <= 0) {
+      addMessage(
+        "Those numbers look off. Double-check and send like:<br>" +
+          "Height (cm): 175<br>Weight (kg): 68"
+      );
+      return;
+    }
+
+    heightM = heightCm / 100;
+    weightKg = kg;
+    bmi = weightKg / (heightM * heightM);
+
+    const cat = getBmiCategory(bmi);
 
     addMessage(
-      `Alright, here’s your BMI: <b>${bmi.toFixed(
-        1
-      )}</b>, which falls in the <b>${cat}</b> category.`
+      `Your estimated BMI is <b>${bmi.toFixed(1)}</b>, which is considered <b>${cat}</b>.`
     );
-    addMessage(healthyWeightText());
+    addMessage(getHealthyWeightRangeText());
 
-    convoStep = "goal";
+    convoStep = "askGoal";
     addMessage(
-      "Now the fun part: what do you want to accomplish?\n" +
-        "You can say things like <b>build muscle</b>, <b>get abs</b>, or <b>lose weight</b> in general."
+      "Now, what’s your main goal?<br>" +
+        "Do you want to <b>lose weight</b>, <b>build muscle</b>, or <b>get abs</b>?"
     );
     return;
   }
 
-  // STEP 4: Goal & workout recommendation
-  if (convoStep === "goal") {
-    const plan = buildWorkoutPlan(input);
-    addMessage(plan);
+  // STEP 4: Ask goal (lose weight / build muscle / get abs)
+  if (convoStep === "askGoal") {
+    if (
+      lower.includes("lose") ||
+      lower.includes("fat") ||
+      lower.includes("cut") ||
+      lower.includes("weight")
+    ) {
+      goal = "lose";
+    } else if (
+      lower.includes("muscle") ||
+      lower.includes("bulk") ||
+      lower.includes("mass") ||
+      lower.includes("strength")
+    ) {
+      goal = "muscle";
+    } else if (lower.includes("abs") || lower.includes("core") || lower.includes("six")) {
+      goal = "abs";
+    } else {
+      goal = "maintain";
+    }
+
+    const dietText = getDietText(goal);
+    const workoutText = getWorkoutText(goal);
+
+    addMessage(dietText);
+    addMessage(workoutText);
     addMessage(
-      "If you want, ask me follow-up stuff like <b>how many days per week</b>, <b>how long it might take</b>, or type <b>restart</b> to recalculate BMI."
+      "If you want to tweak anything or run the numbers again, just type <b>restart</b>."
     );
-    convoStep = "done";
+
+    convoStep = "afterPlan";
     return;
   }
 
-  // STEP 5: Done – more conversational mode
-  if (convoStep === "done") {
+  // STEP 5: After plan – conversational follow-up
+  if (convoStep === "afterPlan") {
     if (lower.includes("bmi")) {
       if (bmi) {
         addMessage(
-          `Your last BMI was <b>${bmi.toFixed(
-            1
-          )}</b>. If your height or weight changes, type <b>restart</b> and we’ll redo everything.`
+          `Your latest BMI is <b>${bmi.toFixed(1)}</b>. If your height/weight changes, type <b>restart</b> to recalculate.`
         );
       } else {
         addMessage(
-          "We haven’t calculated your BMI yet in this session. Type <b>restart</b> to go through it."
+          "We haven’t calculated BMI this session. Type <b>restart</b> if you want to go through it again."
         );
       }
       return;
     }
 
-    if (lower.includes("how many days") || lower.includes("how often")) {
-      addMessage(
-        "Good question. Most people do well with <b>3–5 days per week</b> of lifting and <b>2–4 days</b> of cardio, depending on your schedule and recovery."
-      );
-      return;
-    }
-
-    if (lower.includes("how long") || lower.includes("how fast")) {
-      addMessage(
-        "Roughly speaking, visible progress usually shows in <b>4–8 weeks</b>, and bigger changes in <b>3–6 months</b>, as long as you’re consistent with training, sleep, and food."
-      );
-      return;
-    }
-
-    if (lower.includes("diet") || lower.includes("food") || lower.includes("eat")) {
-      addMessage(
-        "Keep it simple: mostly whole foods, plenty of protein, fruits, veggies, whole grains, and healthy fats. For fat loss, small calorie deficit; for muscle gain, small surplus."
-      );
-      return;
-    }
-
     if (
-      lower.includes("abs") ||
-      lower.includes("muscle") ||
-      lower.includes("lose weight") ||
-      lower.includes("lose fat") ||
-      lower.includes("get bigger") ||
-      lower.includes("tone")
+      lower.includes("diet") ||
+      lower.includes("food") ||
+      lower.includes("eat") ||
+      lower.includes("meal")
     ) {
-      const plan = buildWorkoutPlan(input);
-      addMessage(plan);
+      addMessage(
+        "Think of your diet as support for the training. Stay mostly on the plans I gave you, but we can adjust portion sizes and protein if needed. Type <b>restart</b> to rerun from the top."
+      );
       return;
     }
 
-    // Fallback general “AI-ish” reply
+    if (lower.includes("thanks") || lower.includes("thank you")) {
+      addMessage("Anytime! 💪 Stay consistent. If you want to start over, just type <b>restart</b>.");
+      return;
+    }
+
+    // If they type another goal again, re-send their goal diet/workout
+    if (
+      lower.includes("lose") ||
+      lower.includes("build") ||
+      lower.includes("muscle") ||
+      lower.includes("abs") ||
+      lower.includes("core")
+    ) {
+      // quick re-map
+      if (lower.includes("lose") || lower.includes("weight") || lower.includes("fat")) {
+        goal = "lose";
+      } else if (lower.includes("muscle") || lower.includes("build")) {
+        goal = "muscle";
+      } else if (lower.includes("abs") || lower.includes("core")) {
+        goal = "abs";
+      }
+      addMessage(getDietText(goal));
+      addMessage(getWorkoutText(goal));
+      return;
+    }
+
+    // Fallback
     addMessage(
-      "Got it. I can tweak your routine, talk about diet, or recalc your BMI. Ask me about <b>workouts</b>, <b>food</b>, <b>how many days</b>, or type <b>restart</b> to start over."
+      "I can help adjust your plan, talk more about diet, or we can <b>restart</b> and recalc your BMI."
     );
   }
 }
 
-// ---------- Initial Messages ----------
+// ---------- Initial greeting ----------
 addMessage(
-  "Hey, I’m your AI fitness assistant 👋<br>" +
-    "I’ll use your <b>height</b>, <b>weight</b>, and <b>goal</b> to calculate your BMI and build a routine that actually makes sense for you."
+  "Hey! I’m your AI fitness coach 🤖💪<br>" +
+    "I’ll grab your height and weight to calculate your BMI, then help you pick a goal and give you a diet + workout plan."
 );
-addMessage(
-  "First thing: what units do you want to use?<br>" +
-    "Type <b>metric</b> (cm &amp; kg) or <b>imperial</b> (inches &amp; lbs)."
-);
+addMessage("First, just say <b>hi</b> or <b>hey</b> so we can start.");
 
 // ---------- Events ----------
 sendBtn.addEventListener("click", () => {
@@ -332,10 +475,13 @@ inputEl.addEventListener("keydown", (e) => {
   }
 });
 
-chipsEl.addEventListener("click", (e) => {
-  const chip = e.target.closest(".chip");
-  if (!chip) return;
-  const goalText = chip.dataset.goal || chip.textContent;
-  inputEl.value = goalText;
-  sendBtn.click();
-});
+if (chipsEl) {
+  // You can still tap chips later to talk about goals
+  chipsEl.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    const goalText = chip.dataset.goal || chip.textContent;
+    inputEl.value = goalText;
+    sendBtn.click();
+  });
+}
